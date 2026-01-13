@@ -51,3 +51,43 @@ def save_state(state):
   os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
   with open(STATE_FILE, "w") as f:
     json.dump(state, f, indent=2)
+
+def compute_next_chime(active_hours, last_chimed_hour):
+  now = datetime.now()
+  current_hour = now.hour
+  next_hour = current_hour
+  for i in range(1, 25):
+    h = (current_hour + i) % 24
+    if active_hours[h] and h != last_chimed_hour:
+      next_hour = h
+      break
+  next_chime = now.replace(minute=0, second=0, microsecond=0)
+  if next_hour <= current_hour:
+    next_chime += timedelta(days=1)
+  next_chime = next_chime.replace(hour=next_hour)
+  return next_chime
+
+def seconds_until(dt):
+  now = datetime.now()
+  delta = dt - now
+  return max(delta.total_seconds(), 0)
+
+def check_command():
+  if not os.path.exists(COMMAND_FILE):
+    return None
+  try:
+    with open(COMMAND_FILE, "r") as f:
+      cmd = f.read().strip().lower()
+    open(COMMAND_FILE, "w").close()
+    return cmd
+  except Exception:
+    return None
+
+def play_bell(bell_file, volume):
+  import simpleaudio as sa
+  try:
+    wave_obj = sa.WaveObject.from_wave_file(bell_file)
+    play_obj = wave_obj.play()
+    play_obj.wait_done()
+  except Exception as e:
+    print(f"Failed to play bell: {e}")
