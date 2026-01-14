@@ -83,11 +83,52 @@ def check_command():
   except Exception:
     return None
 
-def play_bell(bell_file, volume):
+def play_bell(bell_file, volume, count=1, interval=1.5):
   import simpleaudio as sa
   try:
     wave_obj = sa.WaveObject.from_wave_file(bell_file)
-    play_obj = wave_obj.play()
-    play_obj.wait_done()
+    for _ in range(count):
+      play_obj = wave_obj.play()
+      play_obj.wait_done()
+      if _ < count - 1:
+        time.sleep(interval)
   except Exception as e:
     print(f"Failed to play bell: {e}")
+
+# ----------- Main Daemon Loop -----------
+def main():
+  config = load_config()
+  state = load_state()
+  print("Hourly bell daemon started.")
+  
+  while True:
+    if not config["enabled"]:
+      time.sleep(60)
+      config = load_config()
+      continue
+
+    next_chime = compute_next_chime(config["active_hours"], state.get("last_chimed_hour"))
+    sleep_secs = seconds_until(next_chime)
+    time.sleep(sleep_secs)
+
+    cmd = check_command()
+    if cmd == "shutdown":
+      print("Shutdown command received. Exiting.")
+      break
+    elif cmd == "reload":
+      config = load_config()
+      continue
+    elif cmd == "test":
+      play_bell(config.get("bell_sound", BELL_DEFAULT), config["volume"])
+      continue
+
+    bell_count = next_chime.hour % 12
+    if bell_count == 0:
+      bell_count = 12
+    play_bell(config.get("bell_sound", BELL_DEFAULT), config["volume"], count=bell_count)
+    state["last_chimed_hour"] = next_chime.hour
+    state["last_run_timestamp"] = datetime.now().isoformat()
+    save_state(state)
+
+if __name__ == "__main__":
+  main()
